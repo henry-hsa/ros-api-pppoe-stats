@@ -133,7 +133,7 @@ def get_rb():
         logging.info(f"Traffic aggregation collected: {len(shared_data['traffic_agg'])}")
 
         # Use collected data from shared dictionary
-        logging.info("Saving collected data to database")
+        logging.info("In Progress, Starting to insert collected data to database")
         into_db_resource(shared_data['resource_device'])
         into_db_user(shared_data['traffic_device'], "update_interval")
         into_db_interface(shared_data['interface_rb'])
