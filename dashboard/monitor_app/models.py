@@ -38,6 +38,13 @@ class UserInfo(models.Model):
     identity_router = models.CharField(max_length=255, null=True)
     status = models.CharField(max_length=255, null=True)
 
+    class Meta:
+        unique_together = ['user_pppoe', 'router_ip']
+        indexes = [
+            models.Index(fields=['user_pppoe', 'router_ip']),
+            models.Index(fields=['status'])
+        ]
+
     # def _str_(self):
     #     return self.user_pppoe
 
