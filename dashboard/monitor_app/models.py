@@ -39,9 +39,9 @@ class UserInfo(models.Model):
     status = models.CharField(max_length=255, null=True)
 
     class Meta:
-        unique_together = ['user_pppoe', 'router_ip']
+        unique_together = ['user_pppoe', 'identity_router']
         indexes = [
-            models.Index(fields=['user_pppoe', 'router_ip']),
+            models.Index(fields=['user_pppoe', 'identity_router']),
             models.Index(fields=['status'])
         ]
 

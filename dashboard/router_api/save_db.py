@@ -18,23 +18,23 @@ def clean_duplicate_users():
     try:
         with transaction.atomic():
             # Get all PPPoE users with duplicates
-            duplicates = UserInfo.objects.values('user_pppoe', 'router_ip').annotate(
+            duplicates = UserInfo.objects.values('user_pppoe', 'identity_router').annotate(
                 count=Count('id')).filter(count__gt=1)
             
             for dup in duplicates:
                 user_pppoe = dup['user_pppoe']
-                router_ip = dup['router_ip']
+                identity_router = dup['identity_router']
                 # Get all entries for this user on this router
                 entries = UserInfo.objects.filter(
                     user_pppoe=user_pppoe,
-                    router_ip=router_ip
+                    identity_router=identity_router
                 ).order_by('-id')
                 
                 # Keep the most recent entry (first one) and delete others
                 if entries.exists():
                     recent_entry = entries.first()
                     entries.exclude(id=recent_entry.id).delete()
-                    logging.info(f"Cleaned up duplicates for user: {user_pppoe} on router: {router_ip}")
+                    logging.info(f"Cleaned up duplicates for user: {user_pppoe} on router: {identity_router}")
     except Exception as e:
         logging.error(f"Error cleaning duplicates: {e}")
 
@@ -130,7 +130,8 @@ def into_db_user(traffic_device, running_from):
                         try:
                             with transaction.atomic():
                                 user_update = UserInfo.objects.filter(
-                                    user_pppoe=pppoe_user
+                                    user_pppoe=pppoe_user,
+                                    identity_router=identity_router
                                 ).order_by('-id').first()
                                 
                                 if user_update:
