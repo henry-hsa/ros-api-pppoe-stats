@@ -18,14 +18,17 @@ def kick(ip_router, user_nya_pppoe):
         traffic_device = {}
         interface_rb = {}
         component = Devices.objects.filter(router_ip=ip_router).first()
-        with routeros_api.RouterOsApiPool(
+        
+        # Create connection without context manager
+        connection = routeros_api.RouterOsApiPool(
             ip_router,
             username=f'{component.username}',
             password=f'{component.password}',
             plaintext_login=True
-        ) as connection:
-            api = connection.get_api()
+        )
+        api = connection.get_api()
 
+        try:
             #######################
             #### KICK PROCESS #####
             collect = api.get_resource('/interface/pppoe-server')
@@ -38,9 +41,13 @@ def kick(ip_router, user_nya_pppoe):
             sleep(0.5)  # Reduced from 1 second
             traffic_device[ip_router], interface_rb[ip_router] = get_traffic(api)
 
-        into_db_user(traffic_device, "kick")
-        logging.info(f"User '{user_nya_pppoe}' kicked successfully")
-        return f"success_{user_nya_pppoe}", 200
+            into_db_user(traffic_device, "kick")
+            logging.info(f"User '{user_nya_pppoe}' kicked successfully")
+            return f"success_{user_nya_pppoe}", 200
+
+        finally:
+            # Ensure connection is always closed
+            connection.disconnect()
 
     except exceptions.RouterOsApiConnectionError as e:
         logging.error(f"Connection error: {e}")
@@ -48,6 +55,9 @@ def kick(ip_router, user_nya_pppoe):
     except exceptions.RouterOsApiCommunicationError as e:
         logging.error(f"Communication error: {e}")
         return e, 400
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        return str(e), 500
 
 
 
