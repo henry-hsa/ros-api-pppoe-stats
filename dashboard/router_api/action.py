@@ -51,7 +51,7 @@ def kick(ip_router, user_nya_pppoe):
                 return msg, 404
 
             collect.remove(id=id_user_pppoe[0])
-            sleep(0.5)  # Reduced from 1 second
+            sleep(1)  
             
             # Update traffic info
             traffic_info = get_traffic(api)
