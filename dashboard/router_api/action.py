@@ -19,6 +19,11 @@ def kick(ip_router, user_nya_pppoe):
         interface_rb = {}
         component = Devices.objects.filter(router_ip=ip_router).first()
         
+        if not component:
+            msg = f"Router {ip_router} not found"
+            logging.error(msg)
+            return msg, 404
+
         # Create connection without context manager
         connection = routeros_api.RouterOsApiPool(
             ip_router,
@@ -29,35 +34,49 @@ def kick(ip_router, user_nya_pppoe):
         api = connection.get_api()
 
         try:
-            #######################
-            #### KICK PROCESS #####
             collect = api.get_resource('/interface/pppoe-server')
 
-            #### COMMAND TO GET ID INTERFACE PPPOE-xx FROM ROUTER
+            # Get user interface and check if exists
             get_id_user_get_id = collect.get(user=user_nya_pppoe)
-            id_user_pppoe = [id["id"] for id in get_id_user_get_id]
-            iget_id_user = id_user_pppoe[0]
-            collect.remove(id=iget_id_user)
-            sleep(0.5)  # Reduced from 1 second
-            traffic_device[ip_router], interface_rb[ip_router] = get_traffic(api)
+            if not get_id_user_get_id:
+                msg = f"User {user_nya_pppoe} not found on router {ip_router}"
+                logging.warning(msg)
+                return msg, 404
 
-            into_db_user(traffic_device, "kick")
+            # Extract ID and kick user
+            id_user_pppoe = [id["id"] for id in get_id_user_get_id]
+            if not id_user_pppoe:
+                msg = f"No valid interface ID found for user {user_nya_pppoe}"
+                logging.warning(msg)
+                return msg, 404
+
+            collect.remove(id=id_user_pppoe[0])
+            sleep(0.5)  # Reduced from 1 second
+            
+            # Update traffic info
+            traffic_info = get_traffic(api)
+            if traffic_info and traffic_info[0]:  # Check if get_traffic returned valid data
+                traffic_device[ip_router], interface_rb[ip_router] = traffic_info
+                into_db_user(traffic_device, "kick")
+            
             logging.info(f"User '{user_nya_pppoe}' kicked successfully")
             return f"success_{user_nya_pppoe}", 200
 
         finally:
-            # Ensure connection is always closed
             connection.disconnect()
 
     except exceptions.RouterOsApiConnectionError as e:
-        logging.error(f"Connection error: {e}")
-        return e, 500
+        msg = f"Connection error: {str(e)}"
+        logging.error(msg)
+        return msg, 500
     except exceptions.RouterOsApiCommunicationError as e:
-        logging.error(f"Communication error: {e}")
-        return e, 400
+        msg = f"Communication error: {str(e)}"
+        logging.error(msg)
+        return msg, 400
     except Exception as e:
-        logging.error(f"Unexpected error: {e}")
-        return str(e), 500
+        msg = f"Unexpected error: {str(e)}"
+        logging.error(msg)
+        return msg, 500
 
 
 
