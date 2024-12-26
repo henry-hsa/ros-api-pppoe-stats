@@ -50,7 +50,7 @@ def into_db_resource(resource_devices):
             update_resource = DevicesInfo.objects.get(router_ip=key)
             update_resource.router_type = item_resource[1]
             update_resource.os_version = item_resource[5]
-            update_resource.memory_qusage = item_resource[3]
+            update_resource.memory_usage = item_resource[3]
             update_resource.cpu_usage = item_resource[4]
             update_resource.uptime = item_resource[2]
             update_resource.serial_number = item_resource[6]
