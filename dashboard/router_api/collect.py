@@ -1,5 +1,5 @@
 import logging
-from monitor_app.models import Devices
+from monitor_app.models import Devices, DevicesInfo, UserInfo, ListInterface, TrafficAgg
 import routeros_api
 from routeros_api import exceptions
 import re
@@ -63,29 +63,33 @@ def process_single_device(device_info, shared_data):
         
         with shared_data['lock']:
             logging.debug(f"Collecting resource info for {ip}")
-            shared_data['resource_device'][ip] = get_info(api)
+            resource_info = get_info(api)
+            if resource_info:
+                shared_data['resource_device'][ip] = resource_info
             
             logging.debug(f"Collecting traffic info for {ip}")
-            shared_data['traffic_device'][ip], shared_data['interface_rb'][ip] = get_traffic(api)
+            traffic_info, interface_info = get_traffic(api)
+            if traffic_info is not None:
+                shared_data['traffic_device'][ip] = traffic_info
+                shared_data['interface_rb'][ip] = interface_info
             
             logging.debug(f"Collecting traffic aggregation for {ip}")
-            shared_data['traffic_agg'][ip] = get_traffic_agg(api)
+            traffic_agg_info = get_traffic_agg(api)
+            if traffic_agg_info:
+                shared_data['traffic_agg'][ip] = traffic_agg_info
             
         connection.disconnect()
         logging.info(f"Successfully processed device {router_name} ({ip})")
         
     except exceptions.RouterOsApiConnectionError as e:
         logging.error(f"Connection error for {ip}: {str(e)}")
-        item_save = TrafficAgg(
-            router_ip=ip,
-            router_name=router_name,
-            upload="null",
-            download="null",
-            cpu_load="null"
-        )
-        item_save.save()
+        handle_router_error(ip, router_name)  # Use shared utility
+    except exceptions.RouterOsApiCommunicationError as e:
+        logging.error(f"Communication error for {ip}: {str(e)}")
+        handle_router_error(ip, router_name)
     except Exception as e:
         logging.error(f"Unexpected error processing {ip}: {str(e)}")
+        handle_router_error(ip, router_name)
         raise
 
 
@@ -158,7 +162,11 @@ def get_traffic_agg(api):
         return f"{upload};{download}"
 
     except exceptions.RouterOsApiCommunicationError as e:
-        print(e)
+        logging.error(f"Communication error in get_traffic_agg: {str(e)}")
+        return None
+    except Exception as e:
+        logging.error(f"Unexpected error in get_traffic_agg: {str(e)}")
+        return None
 
 
 def get_info(api):
@@ -188,7 +196,11 @@ def get_info(api):
         return resource_rb
 
     except exceptions.RouterOsApiCommunicationError as e:
-        print(e)
+        logging.error(f"Communication error in get_info: {str(e)}")
+        return None
+    except Exception as e:
+        logging.error(f"Unexpected error in get_info: {str(e)}")
+        return None
 
 
 def get_traffic(api):
@@ -282,5 +294,9 @@ def get_traffic(api):
 
         return all_user_pppoe, all_int_vlan
     except exceptions.RouterOsApiCommunicationError as e:
-        print(e)
+        logging.error(f"Communication error in get_traffic: {str(e)}")
+        return None, None
+    except Exception as e:
+        logging.error(f"Unexpected error in get_traffic: {str(e)}")
+        return None, None
 
