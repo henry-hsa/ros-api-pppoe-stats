@@ -6,7 +6,9 @@ import re
 from datetime import datetime
 from collections import Counter
 from threading import Lock
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
+import concurrent.futures
+import time
 from .shared_utils import handle_router_error
 from .save_db import (
     into_db_resource, 
@@ -15,6 +17,7 @@ from .save_db import (
     into_db_traffic_agg, 
     into_db_user_traffic_accumulate
 )
+import socket
 
 
 def convert_bytes(bytes_number):
@@ -46,57 +49,68 @@ def convert_bytes_only(bytes_number):
 
 
 def process_single_device(device_info, shared_data):
+    """Process single device with retry mechanism"""
     ip = device_info.router_ip
-    username = device_info.username
-    password = device_info.password
-    router_name = device_info.router_name
+    max_retries = 2
+    retry_delay = 1
     
-    logging.info(f"Starting connection to {router_name} ({ip})")
-    try:
-        connection = routeros_api.RouterOsApiPool(
-            ip, 
-            username=f'{username}', 
-            password=f'{password}', 
-            plaintext_login=True
-        )
-        api = connection.get_api()
+    for attempt in range(max_retries):
+        try:
+            # Default socket timeout for underlying connections
+            socket.setdefaulttimeout(10)  # 10 seconds timeout
+            
+            connection = routeros_api.RouterOsApiPool(
+                ip, 
+                username=f'{device_info.username}', 
+                password=f'{device_info.password}', 
+                plaintext_login=True
+            )
+            api = connection.get_api()
         
-        with shared_data['lock']:
-            logging.debug(f"Collecting resource info for {ip}")
-            resource_info = get_info(api)
-            if resource_info:
-                shared_data['resource_device'][ip] = resource_info
-            
-            logging.debug(f"Collecting traffic info for {ip}")
-            traffic_info, interface_info = get_traffic(api)
-            if traffic_info is not None:
-                shared_data['traffic_device'][ip] = traffic_info
-                shared_data['interface_rb'][ip] = interface_info
-            
-            logging.debug(f"Collecting traffic aggregation for {ip}")
-            traffic_agg_info = get_traffic_agg(api)
-            if traffic_agg_info:
-                shared_data['traffic_agg'][ip] = traffic_agg_info
-            
-        connection.disconnect()
-        logging.info(f"Successfully processed device {router_name} ({ip})")
+            with shared_data['lock']:
+                logging.debug(f"Collecting resource info for {ip}")
+                resource_info = get_info(api)
+                if resource_info:
+                    shared_data['resource_device'][ip] = resource_info
+                
+                logging.debug(f"Collecting traffic info for {ip}")
+                traffic_info, interface_info = get_traffic(api)
+                if traffic_info is not None:
+                    shared_data['traffic_device'][ip] = traffic_info
+                    shared_data['interface_rb'][ip] = interface_info
+                
+                logging.debug(f"Collecting traffic aggregation for {ip}")
+                traffic_agg_info = get_traffic_agg(api)
+                if traffic_agg_info:
+                    shared_data['traffic_agg'][ip] = traffic_agg_info
+                
+            connection.disconnect()
+            logging.info(f"Successfully processed device {device_info.router_name} ({ip})")
+            break
         
-    except exceptions.RouterOsApiConnectionError as e:
-        logging.error(f"Connection error for {ip}: {str(e)}")
-        handle_router_error(ip, router_name)  # Use shared utility
-    except exceptions.RouterOsApiCommunicationError as e:
-        logging.error(f"Communication error for {ip}: {str(e)}")
-        handle_router_error(ip, router_name)
-    except Exception as e:
-        logging.error(f"Unexpected error processing {ip}: {str(e)}")
-        handle_router_error(ip, router_name)
-        raise
+        except (exceptions.RouterOsApiConnectionError, socket.timeout) as e:
+            if attempt < max_retries - 1:
+                logging.warning(f"Retry {attempt + 1} for {ip}: {str(e)}")
+                time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                continue
+            logging.error(f"All retries failed for {ip}: {str(e)}")
+            handle_router_error(ip, device_info.router_name)
+        except Exception as e:
+            logging.error(f"Unexpected error for {ip}: {str(e)}")
+            handle_router_error(ip, device_info.router_name)
+            break
+        finally:
+            # Reset socket timeout to default
+            socket.setdefaulttimeout(None)
 
 
 def get_rb():
     logging.info("Starting collection cycle")
     
     try:
+        start_time = time.time()
+        max_execution_time = 45  # seconds (less than scheduler interval)
+        
         device = Devices.objects.all()
         device_count = len(device)
         logging.info(f"Found {device_count} devices in database")
@@ -125,10 +139,27 @@ def get_rb():
         logging.info(f"Using {max_workers} worker threads")
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            executor.map(
-                lambda x: process_single_device(x, shared_data), 
-                device
+            futures = {
+                executor.submit(process_single_device, device, shared_data): device 
+                for device in device
+            }
+            
+            # Wait for completion or timeout
+            done, not_done = concurrent.futures.wait(
+                futures,
+                timeout=max_execution_time,
+                return_when=concurrent.futures.ALL_COMPLETED
             )
+            
+            # Handle timeouts
+            for future in not_done:
+                device = futures[future]
+                logging.error(f"Device {device.router_ip} timed out")
+                future.cancel()
+                handle_router_error(device.router_ip, device.router_name)
+                
+        elapsed = time.time() - start_time
+        logging.info(f"Collection cycle completed in {elapsed:.2f} seconds")
 
         # Verify collected data
         logging.info(f"Devices processed: {len(shared_data['resource_device'])}")
