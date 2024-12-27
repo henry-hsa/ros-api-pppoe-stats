@@ -3,7 +3,7 @@ from monitor_app.models import Devices, DevicesInfo, UserInfo, ListInterface, Tr
 import routeros_api
 from routeros_api import exceptions
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import Counter
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
@@ -53,6 +53,7 @@ def process_single_device(device_info, shared_data):
     ip = device_info.router_ip
     max_retries = 2
     retry_delay = 1
+    start_time = time.time()
     
     for attempt in range(max_retries):
         try:
@@ -85,7 +86,9 @@ def process_single_device(device_info, shared_data):
                     shared_data['traffic_agg'][ip] = traffic_agg_info
                 
             connection.disconnect()
-            logging.info(f"Successfully processed device {device_info.router_name} ({ip})")
+            elapsed = time.time() - start_time
+            logging.info(f"Device {device_info.router_name} ({ip}) processed in {elapsed:.2f} seconds")
+            shared_data['timings'][ip] = elapsed
             break
         
         except (exceptions.RouterOsApiConnectionError, socket.timeout) as e:
@@ -95,9 +98,13 @@ def process_single_device(device_info, shared_data):
                 continue
             logging.error(f"All retries failed for {ip}: {str(e)}")
             handle_router_error(ip, device_info.router_name)
+            elapsed = time.time() - start_time
+            shared_data['timings'][ip] = elapsed
         except Exception as e:
             logging.error(f"Unexpected error for {ip}: {str(e)}")
             handle_router_error(ip, device_info.router_name)
+            elapsed = time.time() - start_time
+            shared_data['timings'][ip] = elapsed
             break
         finally:
             # Reset socket timeout to default
@@ -108,6 +115,7 @@ def get_rb():
     logging.info("Starting collection cycle")
     
     try:
+        collection_start = time.time()
         start_time = time.time()
         max_execution_time = 45  # seconds (less than scheduler interval)
         
@@ -124,7 +132,8 @@ def get_rb():
             'traffic_device': {},
             'interface_rb': {},
             'traffic_agg': {},
-            'lock': Lock()
+            'lock': Lock(),
+            'timings': {}  # Add timings dictionary
         }
         
         now = datetime.today()
@@ -167,13 +176,73 @@ def get_rb():
         logging.info(f"Interface data collected: {len(shared_data['interface_rb'])}")
         logging.info(f"Traffic aggregation collected: {len(shared_data['traffic_agg'])}")
 
+        # Add timing summary after collection
+        logging.info("\nCollection timing summary:")
+        total_elapsed = time.time() - start_time
+        
+        # Sort devices by collection time
+        sorted_timings = sorted(shared_data['timings'].items(), key=lambda x: x[1], reverse=True)
+        
+        for ip, elapsed in sorted_timings:
+            device = next((d for d in device if d.router_ip == ip), None)
+            if device:
+                logging.info(f"Router: {device.router_name} ({ip})")
+                logging.info(f"├── Collection time: {elapsed:.2f} seconds")
+                logging.info(f"└── Status: {'Success' if ip in shared_data['resource_device'] else 'Failed'}")
+                
+        logging.info(f"\nTotal collection cycle time: {total_elapsed:.2f} seconds")
+        logging.info(f"Average device collection time: {sum(shared_data['timings'].values())/len(shared_data['timings']):.2f} seconds")
+
         # Use collected data from shared dictionary
         logging.info("In Progress, Starting to insert collected data to database")
+        
+        # Collection phase timing
+        collect_end = time.time()
+        collection_time = collect_end - collection_start
+        
+        # Database insertion timing
+        logging.info("\nStarting database operations:")
+        
+        db_timings = {}
+        
+        start = time.time()
         into_db_resource(shared_data['resource_device'])
+        db_timings['resources'] = time.time() - start
+        
+        start = time.time()
         into_db_user(shared_data['traffic_device'], "update_interval")
+        db_timings['users'] = time.time() - start
+        
+        start = time.time()
         into_db_interface(shared_data['interface_rb'])
+        db_timings['interfaces'] = time.time() - start
+        
+        start = time.time()
         into_db_traffic_agg(shared_data['traffic_agg'], shared_data['resource_device'])
+        db_timings['traffic_agg'] = time.time() - start
+        
+        start = time.time()
         into_db_user_traffic_accumulate(shared_data['traffic_device'], "update_interval")
+        db_timings['traffic_accumulate'] = time.time() - start
+
+        # Print timing summary
+        logging.info("\nComplete Timing Summary:")
+        logging.info("------------------------")
+        logging.info("Router Collection Phase:")
+        # ...existing router timing code...
+        
+        logging.info("\nDatabase Operations Phase:")
+        for operation, elapsed in db_timings.items():
+            logging.info(f"├── {operation}: {elapsed:.2f} seconds")
+        
+        total_db_time = sum(db_timings.values())
+        logging.info(f"└── Total DB Operations: {total_db_time:.2f} seconds")
+        
+        total_time = time.time() - collection_start
+        logging.info(f"\nTotal Execution Time: {total_time:.2f} seconds")
+        logging.info(f"├── Collection: {collection_time:.2f} seconds ({(collection_time/total_time)*100:.1f}%)")
+        logging.info(f"└── Database Ops: {total_db_time:.2f} seconds ({(total_db_time/total_time)*100:.1f}%)")
+
         logging.info("Collection cycle completed successfully")
 
     except Exception as e:
