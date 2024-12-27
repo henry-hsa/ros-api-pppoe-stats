@@ -116,11 +116,10 @@ def get_rb():
     
     try:
         collection_start = time.time()
-        start_time = time.time()
         max_execution_time = 45  # seconds (less than scheduler interval)
         
-        device = Devices.objects.all()
-        device_count = len(device)
+        devices = list(Devices.objects.all())  # Convert QuerySet to list
+        device_count = len(devices)
         logging.info(f"Found {device_count} devices in database")
         
         if (device_count == 0):
@@ -140,7 +139,7 @@ def get_rb():
         logging.info(f"Collection started at: {now}")
 
         # Log device details before processing
-        for d in device:
+        for d in devices:
             logging.info(f"Will process device: {d.router_name} ({d.router_ip})")
 
         # Use ThreadPoolExecutor to process devices in parallel
@@ -149,8 +148,8 @@ def get_rb():
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(process_single_device, device, shared_data): device 
-                for device in device
+                executor.submit(process_single_device, d, shared_data): d 
+                for d in devices  # Use devices list instead of device
             }
             
             # Wait for completion or timeout
@@ -167,7 +166,7 @@ def get_rb():
                 future.cancel()
                 handle_router_error(device.router_ip, device.router_name)
                 
-        elapsed = time.time() - start_time
+        elapsed = time.time() - collection_start
         logging.info(f"Collection cycle completed in {elapsed:.2f} seconds")
 
         # Verify collected data
@@ -178,13 +177,13 @@ def get_rb():
 
         # Add timing summary after collection
         logging.info("\nCollection timing summary:")
-        total_elapsed = time.time() - start_time
+        total_elapsed = time.time() - collection_start
         
         # Sort devices by collection time
         sorted_timings = sorted(shared_data['timings'].items(), key=lambda x: x[1], reverse=True)
         
         for ip, elapsed in sorted_timings:
-            device = next((d for d in device if d.router_ip == ip), None)
+            device = next((d for d in devices if d.router_ip == ip), None)  # Use devices list
             if device:
                 logging.info(f"Router: {device.router_name} ({ip})")
                 logging.info(f"├── Collection time: {elapsed:.2f} seconds")
@@ -229,7 +228,16 @@ def get_rb():
         logging.info("\nComplete Timing Summary:")
         logging.info("------------------------")
         logging.info("Router Collection Phase:")
-        # ...existing router timing code...
+        
+        # Sort devices by collection time
+        sorted_timings = sorted(shared_data['timings'].items(), key=lambda x: x[1], reverse=True)
+        
+        for ip, elapsed in sorted_timings:
+            device = next((d for d in devices if d.router_ip == ip), None)
+            if device:
+                logging.info(f"Router: {device.router_name} ({ip})")
+                logging.info(f"├── Collection time: {elapsed:.2f} seconds")
+                logging.info(f"└── Status: {'Success' if ip in shared_data['resource_device'] else 'Failed'}")
         
         logging.info("\nDatabase Operations Phase:")
         for operation, elapsed in db_timings.items():
