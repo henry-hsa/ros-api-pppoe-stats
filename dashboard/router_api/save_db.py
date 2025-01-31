@@ -38,7 +38,28 @@ def clean_duplicate_users():
     except Exception as e:
         logging.error(f"Error cleaning duplicates: {e}")
 
+def clean_duplicate_devices():
+    """Clean up duplicate DevicesInfo entries by keeping only the most recent one"""
+    try:
+        # Find all router_ips that have duplicates
+        duplicates = DevicesInfo.objects.values('router_ip').annotate(
+            count=Count('id')).filter(count__gt=1)
+        
+        for dup in duplicates:
+            router_ip = dup['router_ip']
+            # Keep the most recent entry and delete others
+            entries = DevicesInfo.objects.filter(router_ip=router_ip).order_by('-id')
+            if entries.exists():
+                latest = entries.first()
+                entries.exclude(id=latest.id).delete()
+                logging.info(f"Cleaned up duplicates for router_ip: {router_ip}")
+    except Exception as e:
+        logging.error(f"Error cleaning duplicates: {e}")
+
 def into_db_resource(resource_devices):
+    # First, clean up any existing duplicates
+    clean_duplicate_devices()
+    
     check_resource = DevicesInfo.objects.values_list('router_ip', flat=True)
     check_resource = list(check_resource)
 
@@ -46,28 +67,33 @@ def into_db_resource(resource_devices):
         string_resource = resource_devices[key][0]
         item_resource = string_resource.split(";")
 
-        if key in check_resource:
-            update_resource = DevicesInfo.objects.get(router_ip=key)
-            update_resource.router_type = item_resource[1]
-            update_resource.os_version = item_resource[5]
-            update_resource.memory_usage = item_resource[3]
-            update_resource.cpu_usage = item_resource[4]
-            update_resource.uptime = item_resource[2]
-            update_resource.serial_number = item_resource[6]
-
-            update_resource.save()
-        else:
-            resource_info_save = DevicesInfo(
-                router_name=item_resource[0],
-                router_ip=key,
-                router_type=item_resource[1],
-                os_version=item_resource[5],
-                memory_usage=item_resource[3],
-                cpu_usage=item_resource[4],
-                uptime=item_resource[2],
-                serial_number=item_resource[6],
-            )
-            resource_info_save.save()
+        try:
+            if key in check_resource:
+                # Use filter().first() instead of get() to avoid MultipleObjectsReturned
+                update_resource = DevicesInfo.objects.filter(router_ip=key).first()
+                if update_resource:
+                    update_resource.router_type = item_resource[1]
+                    update_resource.os_version = item_resource[5]
+                    update_resource.memory_usage = item_resource[3]
+                    update_resource.cpu_usage = item_resource[4]
+                    update_resource.uptime = item_resource[2]
+                    update_resource.serial_number = item_resource[6]
+                    update_resource.save()
+            else:
+                resource_info_save = DevicesInfo(
+                    router_name=item_resource[0],
+                    router_ip=key,
+                    router_type=item_resource[1],
+                    os_version=item_resource[5],
+                    memory_usage=item_resource[3],
+                    cpu_usage=item_resource[4],
+                    uptime=item_resource[2],
+                    serial_number=item_resource[6],
+                )
+                resource_info_save.save()
+        except Exception as e:
+            logging.error(f"Error updating device info for {key}: {e}")
+            continue
 
 def retry_on_deadlock(func, max_attempts=3, wait_time=1):
     """Retry function on deadlock with exponential backoff"""
