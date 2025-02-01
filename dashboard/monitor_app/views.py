@@ -201,8 +201,14 @@ def index(request):
     users_online = UserInfo.objects.filter(status="Online")
     users_offline = UserInfo.objects.filter(status="Offline")
     chart_data = TrafficAgg.objects.all()
-    router_devices = TrafficAgg.objects.values(
-        'router_name', 'router_ip').distinct()
+    router_devices = TrafficAgg.objects.values('router_name', 'router_ip').distinct()
+    
+    # Add this new code to get users per device
+    users_per_device = {}
+    for device in all_devices:
+        user_count = UserInfo.objects.filter(router_ip=device.router_ip).count()
+        users_per_device[device.router_name] = user_count
+
     try:
         latest_updated = TrafficAgg.objects.filter(
             update_time__isnull=False).latest('update_time')
@@ -214,6 +220,7 @@ def index(request):
     users_count = all_users.count()
     online_count = users_online.count()
     offline_count = users_offline.count()
+    
     context = {
         'devices_count': devices_count,
         'users_count': users_count,
@@ -221,7 +228,8 @@ def index(request):
         'users_offline': offline_count,
         'chart_data': chart_data,
         'routers': router_devices,
-        'latest_update': result
+        'latest_update': result,
+        'users_per_device': users_per_device,  # Add this to the context
     }
     return render(request, 'pages/dashboard.html', context)
 
