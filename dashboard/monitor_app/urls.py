@@ -27,6 +27,7 @@ urlpatterns = [
     path('create_graph_interface', views.interface_graph, name='graph-interface'),
     path('check-interface', views.get_list_interface, name='check-graph-interface'),
     path('monitor_app/get-traffic-agg/', views.get_traffic_agg, name='traffic-agg'),
+    path('get_traffic_agg/', views.get_traffic_agg, name='get_traffic_agg'),
     path('user_accumulate/', views.user_traffic_accumulate, name='user-acumulate'),
     path('list_users_accumulate/', views.UserTrafficAccumulationListView.as_view(), name="list-users-accumulate"),
     path('userlogin/', views.userlogin, name='userlogin'),

@@ -66,5 +66,6 @@ local_settings.py
 
 # ignore problematic login.html 
 
-dashboard/templates/*
+#dashboard/templates/*
+dashboard/templates/login.html 
 .aider*

@@ -1,0 +1,23 @@
+<div class="row">
+    <div class="col-sm-2.5">
+        <table class="row-details">
+            {% for k,v in detail %}
+            <tr><td>{{k}}</td><td>{{v}}</td></tr>
+            {% endfor %}
+
+            {% if status == "Online"%}
+            <tr>
+                <td>
+                    Kick User
+                </td>
+                <td>
+                    <button type="button" title="Kick PPPoE" class="btn btn-outline-danger btn-xs" onclick="reply_click(this.id)" id="{{user}}">
+                        <i class="fas fa-cut"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endif %}
+        </table>
+    </div>
+</div>
+

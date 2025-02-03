@@ -196,18 +196,27 @@ def user_traffic_accumulate(request):
 
 @login_required
 def index(request):
-    all_devices = Devices.objects.all()
+    # Get devices with their info
+    all_devices = Devices.objects.all().select_related()
     all_users = UserInfo.objects.all()
     users_online = UserInfo.objects.filter(status="Online")
     users_offline = UserInfo.objects.filter(status="Offline")
-    chart_data = TrafficAgg.objects.all()
-    router_devices = TrafficAgg.objects.values('router_name', 'router_ip').distinct()
     
-    # Add this new code to get users per device
+    # Get devices info for proper naming
+    devices_info = DevicesInfo.objects.all()
+    device_names = {d.router_ip: d.router_name for d in devices_info}
+    
+    # Calculate users per device using device info names
     users_per_device = {}
     for device in all_devices:
-        user_count = UserInfo.objects.filter(router_ip=device.router_ip).count()
-        users_per_device[device.router_name] = user_count
+        device_name = device_names.get(device.router_ip, device.router_name)
+        device_users = UserInfo.objects.filter(identity_router=device_name)
+        users_per_device[device_name] = {
+            'total': device_users.count(),
+            'online': device_users.filter(status="Online").count(),
+            'offline': device_users.filter(status="Offline").count(),
+            'router_ip': device.router_ip
+        }
 
     try:
         latest_updated = TrafficAgg.objects.filter(
@@ -216,20 +225,15 @@ def index(request):
     except TrafficAgg.DoesNotExist:
         result = None
 
-    devices_count = all_devices.count()
-    users_count = all_users.count()
-    online_count = users_online.count()
-    offline_count = users_offline.count()
-    
     context = {
-        'devices_count': devices_count,
-        'users_count': users_count,
-        'users_online': online_count,
-        'users_offline': offline_count,
-        'chart_data': chart_data,
-        'routers': router_devices,
+        'devices_count': all_devices.count(),
+        'users_count': all_users.count(),
+        'users_online': users_online.count(),
+        'users_offline': users_offline.count(),
+        'chart_data': TrafficAgg.objects.all(),  # Keep original chart_data query
+        'routers': devices_info.values('router_name', 'router_ip').distinct(),
         'latest_update': result,
-        'users_per_device': users_per_device,  # Add this to the context
+        'users_per_device': users_per_device,
     }
     return render(request, 'pages/dashboard.html', context)
 
@@ -410,82 +414,70 @@ def get_list_interface(request):
 
 @login_required
 def get_traffic_agg(request):
-    from datetime import datetime, timedelta
-    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-
-    if is_ajax:
-        if request.method == 'GET':
-
-            router_name_nya = request.GET['data_nya']
-            interval_nya = request.GET['interval']
-            try:
-
-                if interval_nya == "time_5":
-                    default = datetime.now() - timedelta(minutes=5)
-
-                elif interval_nya == "time_30":
-                    default = datetime.now() - timedelta(minutes=30)
-
-                elif interval_nya == "time_60":
-                    default = datetime.now() - timedelta(minutes=60)
-
-                elif interval_nya == "1_day":
-                    default = datetime.now() - timedelta(days=1)
-
-                elif interval_nya == "3_day":
-                    default = datetime.now() - timedelta(days=3)
-
-                elif interval_nya == "7_day":
-                    default = datetime.now() - timedelta(days=7)
-
-                else:
-                    default = datetime.now() - timedelta(minutes=30)
-
-                get_the_data = TrafficAgg.objects.filter(router_ip=router_name_nya, update_time__gte=default).values(
-                    'upload', 'download', 'cpu_load', 'update_time')
-                label_cpu = []
-                dataset_cpu = []
-                upload_data = []
-                download_data = []
-                satuannya_upload = []
-                satuannya_download = []
-
-                for i in get_the_data:
-                    change_date = i["update_time"].isoformat(" ", 'seconds')
-                    label_cpu.append(change_date)
-
-                    if i["upload"] != "null" or i["download"] != "null":
-                        upload, satuan_upload = convert_bytes_only(
-                            int(i["upload"]))
-                        download, satuan_download = convert_bytes_only(
-                            int(i["download"]))
-                        upload_data.append(upload)
-                        download_data.append(download)
-                        satuannya_upload = satuan_upload
-                        satuannya_download = satuan_download
-                    else:
-                        upload_data.append(i["upload"])
-                        download_data.append(i["download"])
-
-                    dataset_cpu.append(i["cpu_load"])
-
-                return JsonResponse({
-                    'label_cpu': label_cpu,
-                    'dataset_cpu': dataset_cpu,
-                    'router_name': router_name_nya,
-                    'upload': upload_data,
-                    'download': download_data,
-                    'satuan_upload': satuannya_upload,
-                    'satuan_download': satuannya_download,
-                    'status': 'success'
-                })
-
-            except exceptions.FieldError as e:
-                return JsonResponse({'status': e})
-
-        return JsonResponse({'status': 'Invalid request'}, status=400)
-    else:
+    if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return HttpResponseBadRequest('Invalid request')
+
+    router_name_nya = request.GET.get('data_nya')
+    interval_nya = request.GET.get('interval', 'time_30')
+    
+    if not router_name_nya:
+        return JsonResponse({'status': 'No router name provided'}, status=400)
+
+    try:
+        # Calculate time range
+        now = timezone.now()
+        if interval_nya == "time_5":
+            default = now - timedelta(minutes=5)
+        elif interval_nya == "time_30":
+            default = now - timedelta(minutes=30)
+        elif interval_nya == "time_60":
+            default = now - timedelta(minutes=60)
+        elif interval_nya == "1_day":
+            default = now - timedelta(days=1)
+        elif interval_nya == "3_day":
+            default = now - timedelta(days=3)
+        elif interval_nya == "7_day":
+            default = now - timedelta(days=7)
+        else:
+            default = now - timedelta(minutes=30)
+
+        # Get traffic data
+        traffic_data = TrafficAgg.objects.filter(
+            router_ip=router_name_nya,
+            update_time__gte=default
+        ).order_by('update_time')
+
+        # Process data
+        result = {
+            'label_cpu': [],
+            'dataset_cpu': [],
+            'upload': [],
+            'download': [],
+            'router_name': router_name_nya,
+            'satuan_upload': '',
+            'satuan_download': ''
+        }
+
+        for data in traffic_data:
+            result['label_cpu'].append(data.update_time.strftime("%Y-%m-%d %H:%M:%S"))
+            result['dataset_cpu'].append(data.cpu_load)
+            
+            if data.upload and data.download:
+                upload, satuan_upload = convert_bytes_only(int(data.upload))
+                download, satuan_download = convert_bytes_only(int(data.download))
+                result['upload'].append(upload)
+                result['download'].append(download)
+                result['satuan_upload'] = satuan_upload
+                result['satuan_download'] = satuan_download
+            else:
+                result['upload'].append(0)
+                result['download'].append(0)
+
+        result['status'] = 'success'
+        return JsonResponse(result)
+
+    except Exception as e:
+        return JsonResponse({'status': str(e)}, status=500)
 
 #Configuration
 @login_required
