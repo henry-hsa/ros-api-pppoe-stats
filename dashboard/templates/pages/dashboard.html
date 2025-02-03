@@ -97,11 +97,11 @@
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Graph Online Users</h5>
-        <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#onlineUsersGraph" aria-expanded="false" aria-controls="onlineUsersGraph">
-          <i class="fa fa-chevron-down"></i>
+        <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#onlineUsersGraph" aria-expanded="true" aria-controls="onlineUsersGraph">
+          <i class="fa fa-chevron-down rotate-icon"></i>
         </button>
       </div>
-      <div class="collapse" id="onlineUsersGraph">
+      <div class="collapse show" id="onlineUsersGraph">
         <div class="card-body">
           <canvas id="onlineUsersChart" height="300"></canvas>
         </div>
@@ -272,9 +272,12 @@ document.addEventListener("DOMContentLoaded", function() {
         localStorage.setItem(this.id, $(this).hasClass('show'));
     });
 
-    // Restore collapse state, except for usersPerDeviceContent which stays collapsed by default
+    // Restore collapse state, but keep onlineUsersGraph expanded by default
     $('.collapse').each(function() {
-        if (this.id !== 'usersPerDeviceContent') {
+        if (this.id === 'onlineUsersGraph') {
+            $(this).addClass('show');
+            $(this).prev('.card-header').find('i.fa-chevron-down').addClass('rotate-icon');
+        } else if (this.id !== 'usersPerDeviceContent') {
             var shouldBeCollapsed = localStorage.getItem(this.id) === 'true';
             if (shouldBeCollapsed) {
                 $(this).addClass('show');
