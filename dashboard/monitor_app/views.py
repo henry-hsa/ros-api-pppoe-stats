@@ -225,6 +225,21 @@ def index(request):
     except TrafficAgg.DoesNotExist:
         result = None
 
+    # Add online users data for graph
+    online_users_data = {
+        'labels': [],
+        'data': []
+    }
+    
+    for device in all_devices:
+        device_name = device_names.get(device.router_ip, device.router_name)
+        online_count = UserInfo.objects.filter(
+            identity_router=device_name,
+            status="Online"
+        ).count()
+        online_users_data['labels'].append(device_name)
+        online_users_data['data'].append(online_count)
+
     context = {
         'devices_count': all_devices.count(),
         'users_count': all_users.count(),
@@ -233,6 +248,7 @@ def index(request):
         'chart_data': TrafficAgg.objects.all(),  # Keep original chart_data query
         'routers': devices_info.values('router_name', 'router_ip').distinct(),
         'latest_update': result,
+        'online_users_data': online_users_data,
         'users_per_device': users_per_device,
     }
     return render(request, 'pages/dashboard.html', context)

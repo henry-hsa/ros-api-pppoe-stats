@@ -91,6 +91,25 @@
 
 </div>
 
+<!-- Graph Online Users Section -->
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Graph Online Users</h5>
+        <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#onlineUsersGraph" aria-expanded="false" aria-controls="onlineUsersGraph">
+          <i class="fa fa-chevron-down"></i>
+        </button>
+      </div>
+      <div class="collapse" id="onlineUsersGraph">
+        <div class="card-body">
+          <canvas id="onlineUsersChart" height="300"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Users per Device Row -->
 {% if users_per_device %}
 <div class="row mt-4">
@@ -98,28 +117,28 @@
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Users per Device</h5>
-        <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#usersPerDeviceContent" aria-expanded="true" aria-controls="usersPerDeviceContent">
+        <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#usersPerDeviceContent" aria-expanded="false" aria-controls="usersPerDeviceContent">
           <i class="fa fa-chevron-down"></i>
         </button>
       </div>
-      <div class="collapse show" id="usersPerDeviceContent">
+      <div class="collapse" id="usersPerDeviceContent">
         <div class="card-body">
           <div class="row">
             {% for device_name, stats in users_per_device.items %}
               <div class="col-12 mb-4">
                 <div class="card">
-                  <div class="card-header bg-light d-flex justify-content-between align-items-center" 
+                  <div class="card-header bg-light d-flex justify-content-between align-items-center collapsed" 
                        role="button" 
                        data-toggle="collapse" 
                        data-target="#device{{ forloop.counter }}" 
-                       aria-expanded="true">
+                       aria-expanded="false">
                     <h6 class="mb-0">{{ device_name }}</h6>
                     <div>
                       <small class="text-muted mr-2">IP: {{ stats.router_ip }}</small>
                       <i class="fa fa-chevron-down"></i>
                     </div>
                   </div>
-                  <div class="collapse show" id="device{{ forloop.counter }}">
+                  <div class="collapse" id="device{{ forloop.counter }}">
                     <div class="card-body">
                       <div class="row">
                         <!-- Total Users -->
@@ -246,6 +265,94 @@ document.addEventListener("DOMContentLoaded", function() {
     // Add smooth transition for collapse
     $('.collapse').on('show.bs.collapse hide.bs.collapse', function() {
         $(this).prev('.card-header').find('i.fa-chevron-down').toggleClass('rotate-icon');
+    });
+
+    // Store collapse state in localStorage
+    $('.collapse').on('shown.bs.collapse hidden.bs.collapse', function() {
+        localStorage.setItem(this.id, $(this).hasClass('show'));
+    });
+
+    // Restore collapse state, except for usersPerDeviceContent which stays collapsed by default
+    $('.collapse').each(function() {
+        if (this.id !== 'usersPerDeviceContent') {
+            var shouldBeCollapsed = localStorage.getItem(this.id) === 'true';
+            if (shouldBeCollapsed) {
+                $(this).addClass('show');
+                $(this).prev('.card-header').find('i.fa-chevron-down').addClass('rotate-icon');
+            }
+        }
+    });
+
+    // Initialize online users chart with improved settings
+    const onlineUsersCtx = document.getElementById('onlineUsersChart').getContext('2d');
+    new Chart(onlineUsersCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ online_users_data.labels|safe }},
+            datasets: [{
+                label: 'Online Users',
+                data: {{ online_users_data.data|safe }},
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1,
+                barThickness: 50  // Make bars wider
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    top: 20,
+                    right: 20,
+                    bottom: 20,
+                    left: 20
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        drawBorder: true,
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    },
+                    ticks: {
+                        stepSize: 50,  // Changed to 50 for better granularity
+                        font: {
+                            size: 12  // Larger font size
+                        },
+                        padding: 10  // Add padding to tick labels
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        font: {
+                            size: 12  // Larger font size
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: 'Online Users per Device',
+                    font: {
+                        size: 16,
+                        weight: 'bold'
+                    },
+                    padding: {
+                        top: 10,
+                        bottom: 30
+                    }
+                }
+            }
+        }
     });
 });
 </script>
