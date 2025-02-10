@@ -91,11 +91,17 @@ class UserInfoListView(AjaxDatatableView):
     search_values_separator = '+'
 
     def get_initial_queryset(self, request=None):
-        select_status = self.request.POST.get('select_status', False)
+        queryset = super().get_initial_queryset(request)
+        
+        # Get both POST and GET parameters to handle both AJAX and direct URL access
+        select_status = self.request.POST.get('select_status') or self.request.GET.get('status')
+        select_device = self.request.POST.get('select_device') or self.request.GET.get('device')
+        
         if select_status:
-            queryset = self.model.objects.filter(status=select_status)
-        else:
-            queryset = super().get_initial_queryset(request)
+            queryset = queryset.filter(status=select_status)
+        if select_device:
+            queryset = queryset.filter(identity_router=select_device)
+            
         return queryset
 
     def render_column(self, row, column):
@@ -228,7 +234,8 @@ def index(request):
     # Add online users data for graph
     online_users_data = {
         'labels': [],
-        'data': []
+        'data': [],
+        'device_names': []  # Add this to store device names for filtering
     }
     
     for device in all_devices:
@@ -239,6 +246,7 @@ def index(request):
         ).count()
         online_users_data['labels'].append(device_name)
         online_users_data['data'].append(online_count)
+        online_users_data['device_names'].append(device_name)  # Store device name
 
     context = {
         'devices_count': all_devices.count(),
@@ -498,94 +506,86 @@ def get_traffic_agg(request):
 #Configuration
 @login_required
 def configure(request):
-    return render(request, 'pages/configure.html')
+    if request.method == "POST":
+        selected_device_id = request.POST.getlist('device')
+        mikrotik_command = request.POST['mikrotik_command'].splitlines()
+        cisco_command = request.POST['cisco_command'].splitlines()
+        for x in selected_device_id:
+            try:
+                dev = get_object_or_404(Device, pk=x)
+                ssh_client = paramiko.SSHClient()
+                ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                ssh_client.connect(hostname=dev.ip_address, username=dev.username, password=dev.password)
 
+                if dev.vendor.lower() == 'cisco':
+                    conn = ssh_client.invoke_shell()
+                    conn.send("conf t\n")
+                    for cmd in cisco_command:
+                        conn.send(cmd + "\n")
+                        time.sleep(1)
+                else:
+                    for cmd in mikrotik_command:
+                        ssh_client.exec_command(cmd)
+
+                log = Log(target=dev.ip_address, action="Configure", status="Success", time=datetime.now(), messages="Nice Run")
+                log.save()
+            except Exception as e:
+                log = Log(target=dev.ip_address, action="Configure", status="Error", time=datetime.now(), messages=e)
+                log.save()
+        
+        return redirect('dashboard.html')
+    else:
+        devices = Device.objects.all()
+        context = {
+            'device': devices
+        }
+        return render(request, 'pages/configure.html', context)
+
+@login_required
 def verify_config(request):
-    return render(request, 'pages/verify_config.html')
+    if request.method == "POST":
+        result = []
+        selected_device_id = request.POST.getlist('device')
+        mikrotik_command = request.POST['mikrotik_command'].splitlines()
+        cisco_command = request.POST['cisco_command'].splitlines()
+        for x in selected_device_id:
+            try:
+                dev = get_object_or_404(Device, pk=x)
+                ssh_client = paramiko.SSHClient()
+                ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                ssh_client.connect(hostname=dev.ip_address, username=dev.username, password=dev.password)
 
+                if dev.vendor.lower() == 'mikrotik':
+                    for cmd in mikrotik_command:
+                        stdin, stdout, stderr = ssh_client.exec_command(cmd)
+                        time.sleep(1)
+                        result.append("Result on {0}".format(dev.ip_address))
+                        result.append(stdout.read().decode())
+                else:
+                    conn = ssh_client.invoke_shell()
+                    conn.send('terminal length 0\n')
+                    for cmd in cisco_command:
+                        result.append("Result on {0}".format(dev.ip_address)) 
+                        conn.send(cmd + "\n")           
+                        time.sleep(1)
+                        output = conn.recv(65535)
+                        result.append(output.decode())
+                log = Log(target=dev.ip_address, action="Verify Configuration", status="Success", time=datetime.now(), messages="Nice Run")
+                log.save()
+            except Exception as e:
+                log = Log(target=dev.ip_address, action="Verify Configuration", status="Error", time=datetime.now(), messages=e)
+                log.save()
+
+        result = '\n'.join(result)
+        return render(request, 'pages/verify_config.html', {'result' : result})
+
+    else:
+        devices = Device.objects.all()
+        context = {
+            'devices': devices
+        }
+        return render(request, 'pages/configure.html', context)
+
+@login_required
 def log(request):
     return render(request, 'pages/log.html')
-#end configure 
-
-#Configuration
-    def configure(request):
-        if request.method == "POST":
-            selected_device_id = request.POST.getlist('device')
-            mikrotik_command = request.POST['mikrotik_command'].splitlines()
-            cisco_command = request.POST['cisco_command'].splitlines()
-            for x in selected_device_id:
-                try:
-                    dev = get_object_or_404(Device, pk=x)
-                    ssh_client = paramiko.SSHClient()
-                    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                    ssh_client.connect(hostname=dev.ip_address, username=dev.username, password=dev.password)
-
-                    if dev.vendor.lower() == 'cisco':
-                        conn = ssh_client.invoke_shell()
-                        conn.send("conf t\n")
-                        for cmd in cisco_command:
-                            conn.send(cmd + "\n")
-                            time.sleep(1)
-                    else:
-                        for cmd in mikrotik_command:
-                            ssh_client.exec_command(cmd)
-
-                    log = Log(target = dev.ip_address, action="Configure", status="Success", time=datetime.now(), messages="Nice Run")
-                    log.save()
-                except Exception as e:
-                    log = Log(target = dev.ip_address, action="Configure", status="Error", time=datetime.now(), messages=e)
-                    log.save()
-            
-            return redirect('dashboard.html')
-        else:
-            devices = Device.objects.all()
-            context = {
-                'device': devices
-                
-                }
-            return render(request, 'configure.html', context)
-
-    def verify_config(request):
-        if request.method == "POST":
-            result = []
-            selected_device_id = request.POST.getlist('device')
-            mikrotik_command = request.POST['mikrotik_command'].splitlines()
-            cisco_command = request.POST['cisco_command'].splitlines()
-            for x in selected_device_id:
-                try:
-                    dev = get_object_or_404(Device, pk=x)
-                    ssh_client = paramiko.SSHClient()
-                    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                    ssh_client.connect(hostname=dev.ip_address, username=dev.username, password=dev.password)
-
-                    if dev.vendor.lower() == 'mikrotik':
-                        for cmd in mikrotik_command:
-                            stdin, stdout, stderr = ssh_client.exec_command(cmd)
-                            time.sleep(1)
-                            result.append("Result on {0}".format(dev.ip_address))
-                            result.append(stdout.read().decode())
-                    else:
-                        conn = ssh_client.invoke_shell()
-                        conn.send('terminal length 0\n')
-                        for cmd in cisco_command:
-                            result.append("Result on {0}".format(dev.ip_address)) 
-                            conn.send(cmd + "\n")           
-                            time.sleep(1)
-                            output = conn.recv(65535)
-                            result.append(output.decode())
-                    log = Log(target = dev.ip_address, action="Verify Configuration", status="Success", time=datetime.now(), messages="Nice Run")
-                    log.save()
-                except Exception as e:
-                    log = Log(target = dev.ip_address, action="Verify Configuration", status="Error", time=datetime.now(), messages=e)
-                    log.save()
-
-            result = '\n'.join(result)
-            return render(request, 'verify_config.html', {'result' : result})
-
-        else:
-            devices = Device.objects.all()
-            context = {
-                'devices' : devices
-        
-            }
-            return render(request, 'configure.html', context)
