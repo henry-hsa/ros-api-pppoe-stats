@@ -55,42 +55,53 @@
 <script type="text/javascript" src="{% static 'ajax_datatable/js/utils.js' %}"></script>
 
 <script type="text/javascript">
-
   $(document).ready(function () {
+    // Get URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const status = urlParams.get('status') || "{{status}}";
+    const device = urlParams.get('device');
 
     $('#table_users_info').on('rowCallback', function (event, table, row, data) {
-
       if (data.status == 'Offline') {
         $(row).find('td:eq(8)').addClass('red_row')
       } else {
         $(row).find('td:eq(8)').addClass('green_row')
       }
-
     });
 
     AjaxDatatableViewUtils.initialize_table(
       $('#table_users_info'),
       "{% url 'list-users-pppoe' %}",
-      extra_option = {
+      {
         processing: false,
         autoWidth: false,
         full_row_select: false,
         scrollX: false,
         buttons: ['copy', 'csv', 'excel'],
-        pageLength: 50,  // Set default page length to 50
+        pageLength: 50,
+        initComplete: function(settings, json) {
+          if (status) {
+            this.api().column(8).search(status);
+          }
+          if (device) {
+            // Assuming device name is in column 2 - adjust index if needed
+            this.api().column(2).search(device);
+          }
+          if (status || device) {
+            this.api().draw();
+          }
+        }
       },
-      extra_data = {
-        "select_status": "{{status}}",
-
+      {
+        "select_status": status,
+        "select_device": device
       }
     );
 
     setInterval(function () {
       AjaxDatatableViewUtils.redraw_table('#table_users_info');
     }, 30000);
-
   });
-
 </script>
 {% endblock javascripts %}
 </div>
