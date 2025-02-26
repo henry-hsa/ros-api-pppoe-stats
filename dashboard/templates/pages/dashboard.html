@@ -286,12 +286,15 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     });
 
-    // Initialize online users chart with improved settings
+    // Initialize online users chart with improved settings and click interactivity
     const onlineUsersCtx = document.getElementById('onlineUsersChart').getContext('2d');
+    const deviceLabels = {{ online_users_data.labels|safe }};
+    const deviceIps = {{ online_users_data.router_ips|safe }};
+    
     new Chart(onlineUsersCtx, {
         type: 'bar',
         data: {
-            labels: {{ online_users_data.labels|safe }},
+            labels: deviceLabels,
             datasets: [{
                 label: 'Online Users',
                 data: {{ online_users_data.data|safe }},
@@ -320,11 +323,11 @@ document.addEventListener("DOMContentLoaded", function() {
                         color: 'rgba(0, 0, 0, 0.1)'
                     },
                     ticks: {
-                        stepSize: 50,  // Changed to 50 for better granularity
+                        stepSize: 50,
                         font: {
-                            size: 12  // Larger font size
+                            size: 12
                         },
-                        padding: 10  // Add padding to tick labels
+                        padding: 10
                     }
                 },
                 x: {
@@ -333,7 +336,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     },
                     ticks: {
                         font: {
-                            size: 12  // Larger font size
+                            size: 12
                         }
                     }
                 }
@@ -344,7 +347,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 },
                 title: {
                     display: true,
-                    text: 'Online Users per Device',
+                    text: 'Online Users per Device (Click on a bar to view users)',
                     font: {
                         size: 16,
                         weight: 'bold'
@@ -353,9 +356,51 @@ document.addEventListener("DOMContentLoaded", function() {
                         top: 10,
                         bottom: 30
                     }
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            return tooltipItems[0].label;
+                        },
+                        label: function(context) {
+                            return 'Online Users: ' + context.raw + ' (Click to view details)';
+                        }
+                    }
+                }
+            },
+            // Fixed click event handler
+            onClick: function(e, elements) {
+                if (elements && elements.length > 0) {
+                    const index = elements[0].index;
+                    const deviceName = deviceLabels[index];
+                    
+                    // Format the URL correctly with device name included
+                    // This matches the format expected by users_info view
+                    const baseUrl = "{% url 'users_info' %}";
+                    const url = baseUrl + (baseUrl.endsWith('/') ? '' : '/') + 'device/' + encodeURIComponent(deviceName);
+                    
+                    // Log for debugging
+                    console.log('Navigating to:', url);
+                    
+                    window.location.href = url;
+                }
+            },
+            // Make the cursor a pointer when hovering over the bars
+            onHover: function(e, elements) {
+                const canvas = document.getElementById('onlineUsersChart');
+                if (elements && elements.length) {
+                    canvas.style.cursor = 'pointer';
+                } else {
+                    canvas.style.cursor = 'default';
                 }
             }
         }
+    });
+    
+    // Preserve any existing click handlers for the Users per Device section
+    $('#usersPerDeviceContent .card-header[role="button"]').off('click.custom').on('click.custom', function(e) {
+        // Allow the default collapse behavior but don't interfere with it
+        e.stopPropagation();
     });
 });
 </script>
@@ -372,6 +417,13 @@ document.addEventListener("DOMContentLoaded", function() {
 }
 .card-header[role="button"]:hover {
     background-color: rgba(0,0,0,0.03);
+}
+/* Add style to show chart is clickable */
+#onlineUsersChart {
+    transition: all 0.3s ease;
+}
+#onlineUsersChart:hover {
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
 }
 </style>
 {% endblock javascripts %}
