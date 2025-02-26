@@ -273,9 +273,14 @@ def userlogin(request):
 
 @login_required
 def users_info(request, status=None):
+    # Get both URL parameters and optional path parameter
+    device = request.GET.get('device')
+    
     context = {
-        'status': '' if not status else status
+        'status': '' if not status else status,
+        'device': device if device else ''
     }
+    
     return render(request, 'pages/users_info.html', context)
 
 

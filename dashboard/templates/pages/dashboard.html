@@ -46,7 +46,7 @@
       <div class="card">
         <div class="card-body">
           <div class="d-inline-block">
-            <h5 class="text-muted">Total Online Users</h5>
+            <h5 class="text-muted">Total Active Users</h5>
             <h2 class="mb-0">{{users_online}}</h2>
           </div>
           <div class="float-right icon-circle-medium  icon-box-lg  bg-info-light mt-1">
@@ -96,7 +96,7 @@
   <div class="col-12">
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Graph Online Users</h5>
+        <h5 class="mb-0">Graph Active Users</h5>
         <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#onlineUsersGraph" aria-expanded="true" aria-controls="onlineUsersGraph">
           <i class="fa fa-chevron-down rotate-icon"></i>
         </button>
@@ -116,7 +116,7 @@
   <div class="col-12">
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Users per Device</h5>
+        <h5 class="mb-0">Active Users per Device</h5>
         <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#usersPerDeviceContent" aria-expanded="false" aria-controls="usersPerDeviceContent">
           <i class="fa fa-chevron-down"></i>
         </button>
@@ -143,24 +143,26 @@
                       <div class="row">
                         <!-- Total Users -->
                         <div class="col-md-4">
-                          <div class="card bg-light">
-                            <div class="card-body">
-                              <div class="d-inline-block">
-                                <h5 class="text-muted mb-1">Total Users</h5>
-                                <h3 class="mb-0">{{ stats.total }}</h3>
-                              </div>
-                              <div class="float-right icon-circle-medium icon-box-lg bg-primary-light mt-1">
-                                <i class="fa fa-child fa-fw fa-sm text-primary"></i>
+                          <a href="{% url 'users_info' %}?device={{ device_name }}" class="text-decoration-none">
+                            <div class="card bg-light">
+                              <div class="card-body">
+                                <div class="d-inline-block">
+                                  <h5 class="text-muted mb-1">Total Users</h5>
+                                  <h3 class="mb-0">{{ stats.total }}</h3>
+                                </div>
+                                <div class="float-right icon-circle-medium icon-box-lg bg-primary-light mt-1">
+                                  <i class="fa fa-child fa-fw fa-sm text-primary"></i>
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          </a>
                         </div>
                         <!-- Online Users -->
                         <div class="col-md-4">
-                          <div class="card bg-light">
+                          <div class="card bg-light device-online-users" data-device-name="{{ device_name }}">
                             <div class="card-body">
                               <div class="d-inline-block">
-                                <h5 class="text-muted mb-1">Online Users</h5>
+                                <h5 class="text-muted mb-1">Active Users</h5>
                                 <h3 class="mb-0">{{ stats.online }}</h3>
                               </div>
                               <div class="float-right icon-circle-medium icon-box-lg bg-info-light mt-1">
@@ -171,17 +173,19 @@
                         </div>
                         <!-- Offline Users -->
                         <div class="col-md-4">
-                          <div class="card bg-light">
-                            <div class="card-body">
-                              <div class="d-inline-block">
-                                <h5 class="text-muted mb-1">Offline Users</h5>
-                                <h3 class="mb-0">{{ stats.offline }}</h3>
-                              </div>
-                              <div class="float-right icon-circle-medium icon-box-lg bg-danger-light mt-1">
-                                <i class="fa fa-user-times fa-fw fa-sm text-danger"></i>
+                          <a href="{% url 'users_info' %}?device={{ device_name }}&status=Offline" class="text-decoration-none">
+                            <div class="card bg-light">
+                              <div class="card-body">
+                                <div class="d-inline-block">
+                                  <h5 class="text-muted mb-1">Offline Users</h5>
+                                  <h3 class="mb-0">{{ stats.offline }}</h3>
+                                </div>
+                                <div class="float-right icon-circle-medium icon-box-lg bg-danger-light mt-1">
+                                  <i class="fa fa-user-times fa-fw fa-sm text-danger"></i>
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          </a>
                         </div>
                       </div>
                     </div>
@@ -289,19 +293,19 @@ document.addEventListener("DOMContentLoaded", function() {
     // Initialize online users chart with improved settings and click interactivity
     const onlineUsersCtx = document.getElementById('onlineUsersChart').getContext('2d');
     const deviceLabels = {{ online_users_data.labels|safe }};
-    const deviceIps = {{ online_users_data.router_ips|safe }};
     
     new Chart(onlineUsersCtx, {
         type: 'bar',
         data: {
             labels: deviceLabels,
             datasets: [{
-                label: 'Online Users',
+                label: 'Active Users',
                 data: {{ online_users_data.data|safe }},
                 backgroundColor: 'rgba(54, 162, 235, 0.2)',
                 borderColor: 'rgba(54, 162, 235, 1)',
                 borderWidth: 1,
-                barThickness: 50  // Make bars wider
+                barThickness: 50,  // Make bars wider
+                minBarLength: 10   // Set minimum bar length for small values
             }]
         },
         options: {
@@ -347,7 +351,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 },
                 title: {
                     display: true,
-                    text: 'Online Users per Device (Click on a bar to view users)',
+                    text: 'Active Users per Device (Click on a bar to view users)',
                     font: {
                         size: 16,
                         weight: 'bold'
@@ -363,44 +367,92 @@ document.addEventListener("DOMContentLoaded", function() {
                             return tooltipItems[0].label;
                         },
                         label: function(context) {
-                            return 'Online Users: ' + context.raw + ' (Click to view details)';
+                            return 'Active Users: ' + context.raw + ' (Click to view details)';
                         }
                     }
                 }
             },
-            // Fixed click event handler
+            // Enhanced click handling for better detection, especially for small bars
             onClick: function(e, elements) {
+                // If no element is directly clicked, find the closest bar
+                if (elements && elements.length === 0) {
+                    const canvasPosition = Chart.helpers.getRelativePosition(e, this.chart);
+                    const dataX = this.chart.scales.x.getValueForPixel(canvasPosition.x);
+                    
+                    // If within the chart area and dataX is a valid index
+                    if (dataX >= 0 && dataX < deviceLabels.length) {
+                        const index = Math.round(dataX);
+                        const deviceName = deviceLabels[index];
+                        
+                        const baseUrl = "{% url 'users_info' %}";
+                        // Add status=Online parameter to show only active users
+                        const url = baseUrl + "?device=" + encodeURIComponent(deviceName) + "&status=Online";
+                        
+                        console.log('Navigating to active users for device:', deviceName);
+                        window.location.href = url;
+                        return;
+                    }
+                }
+                
+                // Standard click handling
                 if (elements && elements.length > 0) {
                     const index = elements[0].index;
                     const deviceName = deviceLabels[index];
                     
-                    // Format the URL correctly with device name included
-                    // This matches the format expected by users_info view
                     const baseUrl = "{% url 'users_info' %}";
-                    const url = baseUrl + (baseUrl.endsWith('/') ? '' : '/') + 'device/' + encodeURIComponent(deviceName);
+                    // Add status=Online parameter to show only active users
+                    const url = baseUrl + "?device=" + encodeURIComponent(deviceName) + "&status=Online";
                     
-                    // Log for debugging
-                    console.log('Navigating to:', url);
-                    
+                    console.log('Navigating to active users for device:', deviceName);
                     window.location.href = url;
                 }
             },
-            // Make the cursor a pointer when hovering over the bars
+            // Make the cursor a pointer when hovering over the bars or near them
             onHover: function(e, elements) {
                 const canvas = document.getElementById('onlineUsersChart');
+                
+                // Check if near any bar (expanded hit area)
                 if (elements && elements.length) {
                     canvas.style.cursor = 'pointer';
                 } else {
+                    const canvasPosition = Chart.helpers.getRelativePosition(e, this.chart);
+                    const dataX = this.chart.scales.x.getValueForPixel(canvasPosition.x);
+                    
+                    // If within the chart area horizontal range
+                    if (dataX >= 0 && dataX < deviceLabels.length) {
+                        const index = Math.round(dataX);
+                        // Check if we're within a reasonable vertical distance of the bar
+                        const yScale = this.chart.scales.y;
+                        const dataValue = this.chart.data.datasets[0].data[index];
+                        const barTop = yScale.getPixelForValue(dataValue);
+                        const proximityThreshold = 20; // pixels
+                        
+                        if (canvasPosition.y > barTop - proximityThreshold) {
+                            canvas.style.cursor = 'pointer';
+                            return;
+                        }
+                    }
+                    
                     canvas.style.cursor = 'default';
                 }
             }
         }
     });
     
-    // Preserve any existing click handlers for the Users per Device section
-    $('#usersPerDeviceContent .card-header[role="button"]').off('click.custom').on('click.custom', function(e) {
-        // Allow the default collapse behavior but don't interfere with it
-        e.stopPropagation();
+    // Add click handler for the Active users cards (formerly Online)
+    $('.device-online-users').on('click', function() {
+        const deviceName = $(this).data('device-name');
+        if (deviceName) {
+            const baseUrl = "{% url 'users_info' %}";
+            const url = baseUrl + "?device=" + encodeURIComponent(deviceName) + "&status=Online";
+            window.location.href = url;
+        }
+    });
+    
+    // Fix the collapse functionality for device cards
+    $('.card-header[role="button"]').on('click', function() {
+        const target = $(this).data('target');
+        $(target).collapse('toggle');
     });
 });
 </script>
@@ -424,6 +476,15 @@ document.addEventListener("DOMContentLoaded", function() {
 }
 #onlineUsersChart:hover {
     box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+/* Make online users cards clickable */
+.device-online-users {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.device-online-users:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.2);
 }
 </style>
 {% endblock javascripts %}
