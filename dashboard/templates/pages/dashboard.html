@@ -8,6 +8,10 @@
 <link rel="stylesheet" type="text/css" href="{% static 'vendor/datatables/css/fixedHeader.bootstrap4.css' %}" />
 <link rel="stylesheet" href="{% static 'vendor/charts/c3charts/c3.css' %}">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.14/dist/css/bootstrap-select.min.css">
+<!-- amCharts 5 CDN -->
+<script src="https://cdn.amcharts.com/lib/5/index.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/percent.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
 <script src="{% static 'libs/js/chart.min.js' %}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.27.0/moment.min.js"
   integrity="sha512-rmZcZsyhe0/MAjquhTgiUcb4d9knaFc7b5xAfju483gbEXTkeJRUMIPk6s3ySZMYUHEcjKbjLjyddGWMrNEvZg=="
@@ -140,52 +144,16 @@
                   </div>
                   <div class="collapse" id="device{{ forloop.counter }}">
                     <div class="card-body">
+                      <!-- AmCharts Pie Chart for device stats -->
                       <div class="row">
-                        <!-- Total Users -->
-                        <div class="col-md-4">
-                          <a href="{% url 'users_info' %}?device={{ device_name }}" class="text-decoration-none">
-                            <div class="card bg-light">
-                              <div class="card-body">
-                                <div class="d-inline-block">
-                                  <h5 class="text-muted mb-1">Total Users</h5>
-                                  <h3 class="mb-0">{{ stats.total }}</h3>
-                                </div>
-                                <div class="float-right icon-circle-medium icon-box-lg bg-primary-light mt-1">
-                                  <i class="fa fa-child fa-fw fa-sm text-primary"></i>
-                                </div>
-                              </div>
-                            </div>
-                          </a>
-                        </div>
-                        <!-- Online Users -->
-                        <div class="col-md-4">
-                          <div class="card bg-light device-online-users" data-device-name="{{ device_name }}">
-                            <div class="card-body">
-                              <div class="d-inline-block">
-                                <h5 class="text-muted mb-1">Active Users</h5>
-                                <h3 class="mb-0">{{ stats.online }}</h3>
-                              </div>
-                              <div class="float-right icon-circle-medium icon-box-lg bg-info-light mt-1">
-                                <i class="fa fa-users fa-fw fa-sm text-info"></i>
-                              </div>
-                            </div>
+                        <div class="col-md-12">
+                          <!-- Chart container -->
+                          <div id="chartdiv-{{ forloop.counter }}" style="width: 100%; height: 300px;" 
+                              data-device-name="{{ device_name }}"
+                              data-total="{{ stats.total }}"
+                              data-online="{{ stats.online }}"
+                              data-offline="{{ stats.offline }}">
                           </div>
-                        </div>
-                        <!-- Offline Users -->
-                        <div class="col-md-4">
-                          <a href="{% url 'users_info' %}?device={{ device_name }}&status=Offline" class="text-decoration-none">
-                            <div class="card bg-light">
-                              <div class="card-body">
-                                <div class="d-inline-block">
-                                  <h5 class="text-muted mb-1">Offline Users</h5>
-                                  <h3 class="mb-0">{{ stats.offline }}</h3>
-                                </div>
-                                <div class="float-right icon-circle-medium icon-box-lg bg-danger-light mt-1">
-                                  <i class="fa fa-user-times fa-fw fa-sm text-danger"></i>
-                                </div>
-                              </div>
-                            </div>
-                          </a>
                         </div>
                       </div>
                     </div>
@@ -290,7 +258,163 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     });
 
-    // Initialize online users chart with improved settings and click interactivity
+    // Initialize amCharts for each device
+    function initializeAmCharts() {
+        document.querySelectorAll('[id^="chartdiv-"]').forEach(function(chartElement) {
+            const deviceName = chartElement.dataset.deviceName;
+            const total = parseInt(chartElement.dataset.total);
+            const online = parseInt(chartElement.dataset.online);
+            const offline = parseInt(chartElement.dataset.offline);
+            
+            // Create root element
+            const root = am5.Root.new(chartElement.id);
+            
+            // Set themes
+            root.setThemes([am5themes_Animated.new(root)]);
+            
+            // Create chart
+            const chart = root.container.children.push(
+                am5percent.PieChart.new(root, {
+                    layout: root.horizontalLayout,
+                    innerRadius: am5.percent(40)
+                })
+            );
+            
+            // Create series
+            const series = chart.series.push(
+                am5percent.PieSeries.new(root, {
+                    valueField: "value",
+                    categoryField: "category",
+                    legendValueText: "{value}",
+                    legendLabelText: "{category}",
+                    startAngle: 180,
+                    endAngle: 360
+                })
+            );
+            
+            // Set slice colors
+            series.slices.template.setAll({
+                stroke: am5.color(0xffffff),
+                strokeWidth: 2,
+                tooltipText: "{category}: {value} users",
+                cornerRadius: 5,
+                templateField: "settings"
+            });
+            
+            // Add click listeners to series slices
+            series.slices.template.events.on("click", function(event) {
+                const dataItem = event.target.dataItem;
+                const category = dataItem.get("category");
+                let url = "{% url 'users_info' %}";
+                
+                if (category === "Active") {
+                    url += "?device=" + encodeURIComponent(deviceName) + "&status=Online";
+                } else if (category === "Offline") {
+                    url += "?device=" + encodeURIComponent(deviceName) + "&status=Offline";
+                } else {
+                    url += "?device=" + encodeURIComponent(deviceName);
+                }
+                
+                window.location.href = url;
+            });
+            
+            // Add hover effect
+            series.slices.template.states.create("hover", {
+                scale: 1.05,
+                fillOpacity: 0.95
+            });
+            
+            // Set cursor style
+            series.slices.template.set("cursorOverStyle", "pointer");
+            
+            // Add legend
+            const legend = chart.children.push(am5.Legend.new(root, {
+                centerY: am5.percent(50),
+                y: am5.percent(50),
+                layout: root.verticalLayout,
+                marginLeft: 30
+            }));
+            
+            // Set legend click behavior - ensure chart segments remain clickable
+            legend.itemContainers.template.set("cursorOverStyle", "pointer");
+            legend.itemContainers.template.events.on("click", function(ev) {
+                const category = ev.target.dataItem.dataContext.category;
+                let url = "{% url 'users_info' %}";
+                
+                if (category === "Active") {
+                    url += "?device=" + encodeURIComponent(deviceName) + "&status=Online";
+                } else if (category === "Offline") {
+                    url += "?device=" + encodeURIComponent(deviceName) + "&status=Offline";
+                } else {
+                    url += "?device=" + encodeURIComponent(deviceName);
+                }
+                
+                window.location.href = url;
+            });
+            
+            // Connect legend and series
+            legend.data.setAll(series.dataItems);
+            
+            // Set data
+            series.data.setAll([
+                {
+                    category: "Total",
+                    value: total,
+                    settings: { fill: am5.color(0x007bff) }
+                },
+                {
+                    category: "Active",
+                    value: online,
+                    settings: { fill: am5.color(0x28a745) }
+                },
+                {
+                    category: "Offline",
+                    value: offline,
+                    settings: { fill: am5.color(0xdc3545) }
+                }
+            ]);
+            
+            // Add title
+            chart.children.unshift(am5.Label.new(root, {
+                text: deviceName + " User Statistics",
+                fontSize: 18,
+                fontWeight: "500",
+                textAlign: "center",
+                x: am5.percent(50),
+                centerX: am5.percent(50),
+                paddingTop: 15,
+                paddingBottom: 0
+            }));
+            
+            // Make the chart appear
+            series.appear(1000, 100);
+            
+            // Ensure proper disposal when collapsing
+            chartElement.addEventListener("hidden.bs.collapse", function() {
+                root.dispose();
+            });
+        });
+    }
+    
+    // Run chart initialization when device sections are expanded
+    $('.collapse[id^="device"]').on('shown.bs.collapse', function() {
+        const chartElement = $(this).find('[id^="chartdiv-"]')[0];
+        // Check if chart is already initialized
+        if (!chartElement._amchart) {
+            setTimeout(() => {
+                initializeAmCharts();
+                chartElement._amchart = true;
+            }, 10);
+        }
+    });
+    
+    // Fix the collapse functionality for device cards
+    $('.card-header[role="button"]').on('click', function() {
+        const target = $(this).data('target');
+        $(target).collapse('toggle');
+    });
+
+    // Keep existing online users chart initialization
     const onlineUsersCtx = document.getElementById('onlineUsersChart').getContext('2d');
     const deviceLabels = {{ online_users_data.labels|safe }};
     
@@ -485,6 +609,10 @@ document.addEventListener("DOMContentLoaded", function() {
 .device-online-users:hover {
     transform: translateY(-3px);
     box-shadow: 0 4px 8px rgba(0, 123, 255, 0.2);
+}
+/* Add pointer style to amChart elements */
+[id^="chartdiv-"] {
+    cursor: pointer;
 }
 </style>
 {% endblock javascripts %}
