@@ -69,37 +69,52 @@
       }
     });
 
+    // Store parameters to preserve across DataTable requests
+    const extraParams = {};
+    if (status) {
+      extraParams.status = status;
+    }
+    if (device) {
+      extraParams.device = device;
+    }
+
     AjaxDatatableViewUtils.initialize_table(
       $('#table_users_info'),
       "{% url 'list-users-pppoe' %}",
       {
-        processing: false,
+        processing: true,
         autoWidth: false,
         full_row_select: false,
         scrollX: false,
         buttons: ['copy', 'csv', 'excel'],
         pageLength: 50,
-        initComplete: function(settings, json) {
-          if (status) {
-            this.api().column(8).search(status);
+        // Modified serverSide to ensure parameters are sent with each request
+        serverSide: true,
+        ajax: {
+          url: "{% url 'list-users-pppoe' %}",
+          type: "POST",
+          data: function(d) {
+            // Add extra parameters to every request
+            if (status) {
+              d.status = status;
+              d.select_status = status;
+            }
+            if (device) {
+              d.device = device;
+              d.select_device = device;
+            }
+            return d;
           }
-          if (device) {
-            // Assuming device name is in column 2 - adjust index if needed
-            this.api().column(2).search(device);
-          }
-          if (status || device) {
-            this.api().draw();
-          }
-        }
+        },
+        // Remove initComplete as we're handling filtering in the server-side processing
       },
-      {
-        "select_status": status,
-        "select_device": device
-      }
+      extraParams
     );
 
     setInterval(function () {
-      AjaxDatatableViewUtils.redraw_table('#table_users_info');
+      // When redrawing, make sure we keep our parameters
+      const table = $('#table_users_info').DataTable();
+      table.ajax.reload(null, false); // null callback, false to maintain page position
     }, 30000);
   });
 </script>

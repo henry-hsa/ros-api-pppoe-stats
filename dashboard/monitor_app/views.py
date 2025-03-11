@@ -93,10 +93,24 @@ class UserInfoListView(AjaxDatatableView):
     def get_initial_queryset(self, request=None):
         queryset = super().get_initial_queryset(request)
         
-        # Get both POST and GET parameters to handle both AJAX and direct URL access
-        select_status = self.request.POST.get('select_status') or self.request.GET.get('status')
-        select_device = self.request.POST.get('select_device') or self.request.GET.get('device')
+        # Get parameters from multiple sources to handle all request types
+        # Check POST data (regular AJAX)
+        select_status = request.POST.get('select_status')
+        select_device = request.POST.get('select_device')
         
+        # If not found, check direct POST params (DataTables)
+        if not select_status:
+            select_status = request.POST.get('status')
+        if not select_device:
+            select_device = request.POST.get('device')
+            
+        # If still not found, check GET parameters (direct URL access)
+        if not select_status:
+            select_status = request.GET.get('status')
+        if not select_device:
+            select_device = request.GET.get('device')
+        
+        # Apply filters
         if select_status:
             queryset = queryset.filter(status=select_status)
         if select_device:
