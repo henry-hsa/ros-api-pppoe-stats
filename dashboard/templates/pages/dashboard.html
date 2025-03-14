@@ -8,17 +8,15 @@
 <link rel="stylesheet" type="text/css" href="{% static 'vendor/datatables/css/fixedHeader.bootstrap4.css' %}" />
 <link rel="stylesheet" href="{% static 'vendor/charts/c3charts/c3.css' %}">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.14/dist/css/bootstrap-select.min.css">
-<!-- amCharts 5 CDN -->
-<script src="https://cdn.amcharts.com/lib/5/index.js"></script>
-<script src="https://cdn.amcharts.com/lib/5/percent.js"></script>
-<script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
 <script src="{% static 'libs/js/chart.min.js' %}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.27.0/moment.min.js"
   integrity="sha512-rmZcZsyhe0/MAjquhTgiUcb4d9knaFc7b5xAfju483gbEXTkeJRUMIPk6s3ySZMYUHEcjKbjLjyddGWMrNEvZg=="
   crossorigin="anonymous"></script>
 {% endblock stylesheet %}
 
-{% block pageheader %}Hi {{ user.first_name }}, Welcome.{% endblock pageheader %}
+{% block pageheader %}Hi {{ user.first_name }}, Welcome.
+<span class="float-right"><em>Data Last updated: {{latest_update}}</em></span>
+{% endblock pageheader %}
 
 {% block content %}
 
@@ -101,13 +99,32 @@
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Graph Active Users</h5>
-        <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#onlineUsersGraph" aria-expanded="true" aria-controls="onlineUsersGraph">
+	  <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#onlineUsersGraph" aria-expanded="true" aria-controls="onlineUsersGraph">
           <i class="fa fa-chevron-down rotate-icon"></i>
         </button>
       </div>
       <div class="collapse show" id="onlineUsersGraph">
         <div class="card-body">
           <canvas id="onlineUsersChart" height="300"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Graph Offline Users Section -->
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Graph Offline Users</h5>
+        <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#offlineUsersGraph" aria-expanded="true" aria-controls="offlineUsersGraph">
+          <i class="fa fa-chevron-down rotate-icon"></i>
+        </button>
+      </div>
+      <div class="collapse show" id="offlineUsersGraph">
+        <div class="card-body">
+          <canvas id="offlineUsersChart" height="300"></canvas>
         </div>
       </div>
     </div>
@@ -131,10 +148,10 @@
             {% for device_name, stats in users_per_device.items %}
               <div class="col-12 mb-4">
                 <div class="card">
-                  <div class="card-header bg-light d-flex justify-content-between align-items-center collapsed" 
-                       role="button" 
-                       data-toggle="collapse" 
-                       data-target="#device{{ forloop.counter }}" 
+                  <div class="card-header bg-light d-flex justify-content-between align-items-center collapsed"
+                       role="button"
+                       data-toggle="collapse"
+                       data-target="#device{{ forloop.counter }}"
                        aria-expanded="false">
                     <h6 class="mb-0">{{ device_name }}</h6>
                     <div>
@@ -144,16 +161,52 @@
                   </div>
                   <div class="collapse" id="device{{ forloop.counter }}">
                     <div class="card-body">
-                      <!-- AmCharts Pie Chart for device stats -->
                       <div class="row">
-                        <div class="col-md-12">
-                          <!-- Chart container -->
-                          <div id="chartdiv-{{ forloop.counter }}" style="width: 100%; height: 300px;" 
-                              data-device-name="{{ device_name }}"
-                              data-total="{{ stats.total }}"
-                              data-online="{{ stats.online }}"
-                              data-offline="{{ stats.offline }}">
+                        <!-- Total Users -->
+                        <div class="col-md-4">
+                          <a href="{% url 'users_info' %}?device={{ device_name }}" class="text-decoration-none">
+                            <div class="card bg-light">
+                              <div class="card-body">
+                                <div class="d-inline-block">
+                                  <h5 class="text-muted mb-1">Total Users</h5>
+                                  <h3 class="mb-0">{{ stats.total }}</h3>
+                                </div>
+                                <div class="float-right icon-circle-medium icon-box-lg bg-primary-light mt-1">
+                                  <i class="fa fa-child fa-fw fa-sm text-primary"></i>
+                                </div>
+                              </div>
+                            </div>
+                          </a>
+                        </div>
+                        <!-- Online Users -->
+                        <div class="col-md-4">
+                          <div class="card bg-light device-online-users" data-device-name="{{ device_name }}">
+                            <div class="card-body">
+                              <div class="d-inline-block">
+                                <h5 class="text-muted mb-1">Active Users</h5>
+                                <h3 class="mb-0">{{ stats.online }}</h3>
+                              </div>
+                              <div class="float-right icon-circle-medium icon-box-lg bg-info-light mt-1">
+                                <i class="fa fa-users fa-fw fa-sm text-info"></i>
+                              </div>
+                            </div>
                           </div>
+                        </div>
+                        <!-- Offline Users -->
+                        <div class="col-md-4">
+                          <a href="{% url 'users_info' %}?device={{ device_name }}&status=Offline" class="text-decoration-none">
+                            <div class="card bg-light">
+                              <div class="card-body">
+                                <div class="d-inline-block">
+                                  <h5 class="text-muted mb-1">Offline Users</h5>
+                                  <h3 class="mb-0">{{ stats.offline }}</h3>
+                                </div>
+                                <div class="float-right icon-circle-medium icon-box-lg bg-danger-light mt-1">
+                                  <i class="fa fa-user-times fa-fw fa-sm text-danger"></i>
+                                </div>
+                              </div>
+                            </div>
+                          </a>
                         </div>
                       </div>
                     </div>
@@ -173,8 +226,7 @@
 <div class="row mt-4">
   <div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
     <div class="card">
-      <h5 class="card-header">Traffic Router <span class="float-right"><em>Last updated: {{latest_update}}</em></span>
-      </h5>
+	    <h5 class="card-header">Traffic Router</h5>
       <div class="form-group">
         <select class="form-control-sm text-right selectpicker" id="select-router" onchange="changeRouterTraffic()">
           {% for router in routers %}
@@ -200,8 +252,7 @@
   </div>
   <div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
     <div class="card">
-      <h5 class="card-header text-left">Cpu Load User <span class="float-right"><em>Last updated:
-            {{latest_update}}</em></span></h5>
+	    <h5 class="card-header text-left">Cpu Load User</h5>
       <div class="form-group">
         <select class="form-control-sm text-left selectpicker" id="cpu_router" onchange="changeRouterCpu()">
           {% for router in routers %}
@@ -246,7 +297,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // Restore collapse state, but keep onlineUsersGraph expanded by default
     $('.collapse').each(function() {
-        if (this.id === 'onlineUsersGraph') {
+        if (this.id === 'onlineUsersGraph' || this.id === 'offlineUsersGraph') {
             $(this).addClass('show');
             $(this).prev('.card-header').find('i.fa-chevron-down').addClass('rotate-icon');
         } else if (this.id !== 'usersPerDeviceContent') {
@@ -258,166 +309,10 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     });
 
-    // Initialize amCharts for each device
-    function initializeAmCharts() {
-        document.querySelectorAll('[id^="chartdiv-"]').forEach(function(chartElement) {
-            const deviceName = chartElement.dataset.deviceName;
-            const total = parseInt(chartElement.dataset.total);
-            const online = parseInt(chartElement.dataset.online);
-            const offline = parseInt(chartElement.dataset.offline);
-            
-            // Create root element
-            const root = am5.Root.new(chartElement.id);
-            
-            // Set themes
-            root.setThemes([am5themes_Animated.new(root)]);
-            
-            // Create chart
-            const chart = root.container.children.push(
-                am5percent.PieChart.new(root, {
-                    layout: root.horizontalLayout,
-                    innerRadius: am5.percent(40)
-                })
-            );
-            
-            // Create series
-            const series = chart.series.push(
-                am5percent.PieSeries.new(root, {
-                    valueField: "value",
-                    categoryField: "category",
-                    legendValueText: "{value}",
-                    legendLabelText: "{category}",
-                    startAngle: 180,
-                    endAngle: 360
-                })
-            );
-            
-            // Set slice colors
-            series.slices.template.setAll({
-                stroke: am5.color(0xffffff),
-                strokeWidth: 2,
-                tooltipText: "{category}: {value} users",
-                cornerRadius: 5,
-                templateField: "settings"
-            });
-            
-            // Add click listeners to series slices
-            series.slices.template.events.on("click", function(event) {
-                const dataItem = event.target.dataItem;
-                const category = dataItem.get("category");
-                let url = "{% url 'users_info' %}";
-                
-                if (category === "Active") {
-                    url += "?device=" + encodeURIComponent(deviceName) + "&status=Online";
-                } else if (category === "Offline") {
-                    url += "?device=" + encodeURIComponent(deviceName) + "&status=Offline";
-                } else {
-                    url += "?device=" + encodeURIComponent(deviceName);
-                }
-                
-                window.location.href = url;
-            });
-            
-            // Add hover effect
-            series.slices.template.states.create("hover", {
-                scale: 1.05,
-                fillOpacity: 0.95
-            });
-            
-            // Set cursor style
-            series.slices.template.set("cursorOverStyle", "pointer");
-            
-            // Add legend
-            const legend = chart.children.push(am5.Legend.new(root, {
-                centerY: am5.percent(50),
-                y: am5.percent(50),
-                layout: root.verticalLayout,
-                marginLeft: 30
-            }));
-            
-            // Set legend click behavior - ensure chart segments remain clickable
-            legend.itemContainers.template.set("cursorOverStyle", "pointer");
-            legend.itemContainers.template.events.on("click", function(ev) {
-                const category = ev.target.dataItem.dataContext.category;
-                let url = "{% url 'users_info' %}";
-                
-                if (category === "Active") {
-                    url += "?device=" + encodeURIComponent(deviceName) + "&status=Online";
-                } else if (category === "Offline") {
-                    url += "?device=" + encodeURIComponent(deviceName) + "&status=Offline";
-                } else {
-                    url += "?device=" + encodeURIComponent(deviceName);
-                }
-                
-                window.location.href = url;
-            });
-            
-            // Connect legend and series
-            legend.data.setAll(series.dataItems);
-            
-            // Set data
-            series.data.setAll([
-                {
-                    category: "Total",
-                    value: total,
-                    settings: { fill: am5.color(0x007bff) }
-                },
-                {
-                    category: "Active",
-                    value: online,
-                    settings: { fill: am5.color(0x28a745) }
-                },
-                {
-                    category: "Offline",
-                    value: offline,
-                    settings: { fill: am5.color(0xdc3545) }
-                }
-            ]);
-            
-            // Add title
-            chart.children.unshift(am5.Label.new(root, {
-                text: deviceName + " User Statistics",
-                fontSize: 18,
-                fontWeight: "500",
-                textAlign: "center",
-                x: am5.percent(50),
-                centerX: am5.percent(50),
-                paddingTop: 15,
-                paddingBottom: 0
-            }));
-            
-            // Make the chart appear
-            series.appear(1000, 100);
-            
-            // Ensure proper disposal when collapsing
-            chartElement.addEventListener("hidden.bs.collapse", function() {
-                root.dispose();
-            });
-        });
-    }
-    
-    // Run chart initialization when device sections are expanded
-    $('.collapse[id^="device"]').on('shown.bs.collapse', function() {
-        const chartElement = $(this).find('[id^="chartdiv-"]')[0];
-        // Check if chart is already initialized
-        if (!chartElement._amchart) {
-            setTimeout(() => {
-                initializeAmCharts();
-                chartElement._amchart = true;
-            }, 10);
-        }
-    });
-    
-    // Fix the collapse functionality for device cards
-    $('.card-header[role="button"]').on('click', function() {
-        const target = $(this).data('target');
-        $(target).collapse('toggle');
-    });
-
-    // Keep existing online users chart initialization
+    // Initialize online users chart with improved settings and click interactivity
     const onlineUsersCtx = document.getElementById('onlineUsersChart').getContext('2d');
     const deviceLabels = {{ online_users_data.labels|safe }};
-    
+
     new Chart(onlineUsersCtx, {
         type: 'bar',
         data: {
@@ -502,17 +397,165 @@ document.addEventListener("DOMContentLoaded", function() {
                 if (elements && elements.length === 0) {
                     const canvasPosition = Chart.helpers.getRelativePosition(e, this.chart);
                     const dataX = this.chart.scales.x.getValueForPixel(canvasPosition.x);
-                    
+
                     // If within the chart area and dataX is a valid index
                     if (dataX >= 0 && dataX < deviceLabels.length) {
                         const index = Math.round(dataX);
                         const deviceName = deviceLabels[index];
-                        
+
                         const baseUrl = "{% url 'users_info' %}";
                         // Add status=Online parameter to show only active users
                         const url = baseUrl + "?device=" + encodeURIComponent(deviceName) + "&status=Online";
-                        
+
                         console.log('Navigating to active users for device:', deviceName);
+                        window.location.href = url;
+                        return;
+                    }
+                }
+
+                // Standard click handling
+                if (elements && elements.length > 0) {
+                    const index = elements[0].index;
+                    const deviceName = deviceLabels[index];
+
+                    const baseUrl = "{% url 'users_info' %}";
+                    // Add status=Online parameter to show only active users
+                    const url = baseUrl + "?device=" + encodeURIComponent(deviceName) + "&status=Online";
+
+                    console.log('Navigating to active users for device:', deviceName);
+                    window.location.href = url;
+                }
+            },
+            // Make the cursor a pointer when hovering over the bars or near them
+            onHover: function(e, elements) {
+                const canvas = document.getElementById('onlineUsersChart');
+
+                // Check if near any bar (expanded hit area)
+                if (elements && elements.length) {
+                    canvas.style.cursor = 'pointer';
+                } else {
+                    const canvasPosition = Chart.helpers.getRelativePosition(e, this.chart);
+                    const dataX = this.chart.scales.x.getValueForPixel(canvasPosition.x);
+
+                    // If within the chart area horizontal range
+                    if (dataX >= 0 && dataX < deviceLabels.length) {
+                        const index = Math.round(dataX);
+                        // Check if we're within a reasonable vertical distance of the bar
+                        const yScale = this.chart.scales.y;
+                        const dataValue = this.chart.data.datasets[0].data[index];
+                        const barTop = yScale.getPixelForValue(dataValue);
+                        const proximityThreshold = 20; // pixels
+
+                        if (canvasPosition.y > barTop - proximityThreshold) {
+                            canvas.style.cursor = 'pointer';
+                            return;
+                        }
+                    }
+
+                    canvas.style.cursor = 'default';
+                }
+            }
+        }
+    });
+    
+    // Initialize offline users chart with similar settings but red color scheme
+    const offlineUsersCtx = document.getElementById('offlineUsersChart').getContext('2d');
+    const offlineLabels = {{ offline_users_data.labels|safe }};
+    
+    new Chart(offlineUsersCtx, {
+        type: 'bar',
+        data: {
+            labels: offlineLabels,
+            datasets: [{
+                label: 'Offline Users',
+                data: {{ offline_users_data.data|safe }},
+                backgroundColor: 'rgba(220, 53, 69, 0.2)',
+                borderColor: 'rgba(220, 53, 69, 1)',
+                borderWidth: 1,
+                barThickness: 50,  // Make bars wider
+                minBarLength: 10   // Set minimum bar length for small values
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    top: 20,
+                    right: 20,
+                    bottom: 20,
+                    left: 20
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        drawBorder: true,
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    },
+                    ticks: {
+                        stepSize: 50,
+                        font: {
+                            size: 12
+                        },
+                        padding: 10
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        font: {
+                            size: 12
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: 'Offline Users per Device (Click on a bar to view users)',
+                    font: {
+                        size: 16,
+                        weight: 'bold'
+                    },
+                    padding: {
+                        top: 10,
+                        bottom: 30
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            return tooltipItems[0].label;
+                        },
+                        label: function(context) {
+                            return 'Offline Users: ' + context.raw + ' (Click to view details)';
+                        }
+                    }
+                }
+            },
+            onClick: function(e, elements) {
+                // If no element is directly clicked, find the closest bar
+                if (elements && elements.length === 0) {
+                    const canvasPosition = Chart.helpers.getRelativePosition(e, this.chart);
+                    const dataX = this.chart.scales.x.getValueForPixel(canvasPosition.x);
+                    
+                    // If within the chart area and dataX is a valid index
+                    if (dataX >= 0 && dataX < offlineLabels.length) {
+                        const index = Math.round(dataX);
+                        const deviceName = offlineLabels[index];
+                        
+                        const baseUrl = "{% url 'users_info' %}";
+                        // Add status=Offline parameter to show only offline users
+                        const url = baseUrl + "?device=" + encodeURIComponent(deviceName) + "&status=Offline";
+                        
+                        console.log('Navigating to offline users for device:', deviceName);
                         window.location.href = url;
                         return;
                     }
@@ -521,19 +564,19 @@ document.addEventListener("DOMContentLoaded", function() {
                 // Standard click handling
                 if (elements && elements.length > 0) {
                     const index = elements[0].index;
-                    const deviceName = deviceLabels[index];
+                    const deviceName = offlineLabels[index];
                     
                     const baseUrl = "{% url 'users_info' %}";
-                    // Add status=Online parameter to show only active users
-                    const url = baseUrl + "?device=" + encodeURIComponent(deviceName) + "&status=Online";
+                    // Add status=Offline parameter to show only offline users
+                    const url = baseUrl + "?device=" + encodeURIComponent(deviceName) + "&status=Offline";
                     
-                    console.log('Navigating to active users for device:', deviceName);
+                    console.log('Navigating to offline users for device:', deviceName);
                     window.location.href = url;
                 }
             },
             // Make the cursor a pointer when hovering over the bars or near them
             onHover: function(e, elements) {
-                const canvas = document.getElementById('onlineUsersChart');
+                const canvas = document.getElementById('offlineUsersChart');
                 
                 // Check if near any bar (expanded hit area)
                 if (elements && elements.length) {
@@ -543,7 +586,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     const dataX = this.chart.scales.x.getValueForPixel(canvasPosition.x);
                     
                     // If within the chart area horizontal range
-                    if (dataX >= 0 && dataX < deviceLabels.length) {
+                    if (dataX >= 0 && dataX < offlineLabels.length) {
                         const index = Math.round(dataX);
                         // Check if we're within a reasonable vertical distance of the bar
                         const yScale = this.chart.scales.y;
@@ -562,7 +605,7 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         }
     });
-    
+
     // Add click handler for the Active users cards (formerly Online)
     $('.device-online-users').on('click', function() {
         const deviceName = $(this).data('device-name');
@@ -572,7 +615,7 @@ document.addEventListener("DOMContentLoaded", function() {
             window.location.href = url;
         }
     });
-    
+
     // Fix the collapse functionality for device cards
     $('.card-header[role="button"]').on('click', function() {
         const target = $(this).data('target');
@@ -595,10 +638,10 @@ document.addEventListener("DOMContentLoaded", function() {
     background-color: rgba(0,0,0,0.03);
 }
 /* Add style to show chart is clickable */
-#onlineUsersChart {
+#onlineUsersChart, #offlineUsersChart {
     transition: all 0.3s ease;
 }
-#onlineUsersChart:hover {
+#onlineUsersChart:hover, #offlineUsersChart:hover {
     box-shadow: 0 0 10px rgba(0,0,0,0.1);
 }
 /* Make online users cards clickable */
@@ -609,10 +652,6 @@ document.addEventListener("DOMContentLoaded", function() {
 .device-online-users:hover {
     transform: translateY(-3px);
     box-shadow: 0 4px 8px rgba(0, 123, 255, 0.2);
-}
-/* Add pointer style to amChart elements */
-[id^="chartdiv-"] {
-    cursor: pointer;
 }
 </style>
 {% endblock javascripts %}

@@ -252,15 +252,33 @@ def index(request):
         'device_names': []  # Add this to store device names for filtering
     }
     
+    # Add offline users data for graph
+    offline_users_data = {
+        'labels': [],
+        'data': [],
+        'device_names': []  # Store device names for filtering
+    }
+    
     for device in all_devices:
         device_name = device_names.get(device.router_ip, device.router_name)
+        
+        # Online users count
         online_count = UserInfo.objects.filter(
             identity_router=device_name,
             status="Online"
         ).count()
         online_users_data['labels'].append(device_name)
         online_users_data['data'].append(online_count)
-        online_users_data['device_names'].append(device_name)  # Store device name
+        online_users_data['device_names'].append(device_name)
+        
+        # Offline users count
+        offline_count = UserInfo.objects.filter(
+            identity_router=device_name,
+            status="Offline"
+        ).count()
+        offline_users_data['labels'].append(device_name)
+        offline_users_data['data'].append(offline_count)
+        offline_users_data['device_names'].append(device_name)
 
     context = {
         'devices_count': all_devices.count(),
@@ -271,6 +289,7 @@ def index(request):
         'routers': devices_info.values('router_name', 'router_ip').distinct(),
         'latest_update': result,
         'online_users_data': online_users_data,
+        'offline_users_data': offline_users_data,
         'users_per_device': users_per_device,
     }
     return render(request, 'pages/dashboard.html', context)
